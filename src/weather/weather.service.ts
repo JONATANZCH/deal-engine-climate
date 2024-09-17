@@ -4,6 +4,11 @@ import { CacheService } from '../cache/cache.service';
 import { ConfigService } from '@nestjs/config';
 import { CreateTicketDto } from 'src/tickets/dto/create-ticket.dto';
 
+interface WeatherData {
+  temp: number;
+  description: string;
+}
+
 @Injectable()
 export class WeatherService {
   private readonly apiKey: string;
@@ -40,25 +45,27 @@ export class WeatherService {
         const originKey = `${parseFloat(ticket.origin_latitude.toFixed(2))}_${parseFloat(ticket.origin_longitude.toFixed(2))}`;
         const destinationKey = `${parseFloat(ticket.destination_latitude.toFixed(2))}_${parseFloat(ticket.destination_longitude.toFixed(2))}`;
 
-        let weatherOrigin;
-        let weatherDestination;
+        let weatherOrigin: WeatherData | undefined;
+        let weatherDestination: WeatherData | undefined;
 
         if (!uniqueCoordinates.has(originKey)) {
-          console.log(`Requesting weather for origin: ${originKey}`);
           uniqueCoordinates.add(originKey);
           weatherOrigin = await this.getWeatherWithCache(
             ticket.origin_latitude,
             ticket.origin_longitude,
           );
+        } else {
+          weatherOrigin = await this.cacheService.get(originKey);
         }
 
         if (!uniqueCoordinates.has(destinationKey)) {
-          console.log(`Requesting weather for destination: ${destinationKey}`);
           uniqueCoordinates.add(destinationKey);
           weatherDestination = await this.getWeatherWithCache(
             ticket.destination_latitude,
             ticket.destination_longitude,
           );
+        } else {
+          weatherDestination = await this.cacheService.get(destinationKey);
         }
 
         return { ticket, weatherOrigin, weatherDestination };
@@ -72,7 +79,7 @@ export class WeatherService {
       weatherReports.push(...batchResults);
     }
 
-    console.log(`Total API requests made: ${this.apiRequestCount}`);
+    this.logger.log(`Total API requests made: ${this.apiRequestCount}`);
     return weatherReports;
   }
 
@@ -83,20 +90,10 @@ export class WeatherService {
     const cacheKey = `${roundedLat}_${roundedLon}`;
     let weather = await this.cacheService.get(cacheKey);
 
-    if (weather) {
-      console.log(`Cache hit for coordinates: ${roundedLat}, ${roundedLon}`);
-    } else {
-      console.log(
-        `Cache miss for coordinates: ${roundedLat}, ${roundedLon}. Fetching from API...`,
-      );
+    if (!weather) {
       this.apiRequestCount++;
       weather = await this.fetchWeatherFromApi(roundedLat, roundedLon);
-
-      // Verifica si el clima se guarda correctamente en el caché
       await this.cacheService.set(cacheKey, weather, this.cacheTTL);
-      console.log(
-        `Weather data stored in cache for coordinates: ${roundedLat}, ${roundedLon}`,
-      );
     }
 
     return weather;
