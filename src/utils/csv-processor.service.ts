@@ -22,7 +22,9 @@ export class CsvProcessorService {
 
           const errors = await validate(dtoInstance);
           if (errors.length > 0) {
-            console.log(`Validation failed: ${JSON.stringify(errors)}`);
+            console.log(
+              `Validation processor failed: ${JSON.stringify(errors)}`,
+            );
             errorsArray.push(errors);
             return;
           }

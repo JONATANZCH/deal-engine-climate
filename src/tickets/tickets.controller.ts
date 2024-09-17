@@ -5,6 +5,8 @@ import {
   UseInterceptors,
   HttpStatus,
   Res,
+  BadRequestException,
+  HttpException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TicketsService } from './tickets.service';
@@ -39,7 +41,13 @@ export class TicketsController {
       }),
       fileFilter: (req, file, callback) => {
         if (file.mimetype !== 'text/csv') {
-          return callback(new Error('Only CSV files are allowed!'), false);
+          return callback(
+            new HttpException(
+              'Only CSV files are allowed!',
+              HttpStatus.BAD_REQUEST,
+            ),
+            false,
+          );
         }
         callback(null, true);
       },
@@ -50,14 +58,16 @@ export class TicketsController {
     @Res() res: Response,
   ): Promise<Response> {
     try {
+      if (!file) {
+        throw new BadRequestException('No file uploaded or invalid file type');
+      }
+
       const result = await this.ticketsService.processCsvAndWeather(file.path);
       return res.status(HttpStatus.OK).json(result);
     } catch (error) {
-      // console.error('Error processing file:', error); //TODO: Depurar errores
-      return res.status(HttpStatus.BAD_REQUEST).json({
+      return res.status(error.status || HttpStatus.BAD_REQUEST).json({
         success: false,
         message: error.message || 'Error processing file',
-        ...(error.response || {}),
       });
     }
   }
